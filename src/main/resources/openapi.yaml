@@ -1,0 +1,422 @@
+openapi: 3.0.3
+
+info:
+  title: UnderSounds Backend API
+  version: 1.0.0
+  description: >
+    API del microservicio de pagos y compras de UnderSounds.
+    Incluye endpoints para gestionar pagos, generar comprobantes PDF,
+    realizar compras de álbumes y canciones, y consultar información entre microservicios.
+
+servers:
+  - url: http://localhost:8080
+    description: Servidor local
+
+tags:
+  - name: Payments
+    description: Endpoints para la gestión de pagos a artistas.
+  - name: Purchases
+    description: Endpoints para la gestión de compras por parte de usuarios.
+
+paths:
+  /api/payments:
+    post:
+      tags: [Payments]
+      summary: Crear un nuevo pago
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentDTO'
+      responses:
+        '200':
+          description: Pago creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDTO'
+        '403':
+          description: Acceso no autorizado
+    get:
+      tags: [Payments]
+      summary: Filtrar pagos
+      description: Filtra pagos según ID de compra, artista, mes, año, estado y rangos de cantidad.
+      operationId: getFilteredPayments
+      parameters:
+        - name: purchaseId
+          in: query
+          description: "Filtrar pagos por el ID de la compra que los originó."
+          schema:
+            type: string
+            format: uuid
+          required: false
+        - name: artistId
+          in: query
+          schema:
+            type: integer
+          required: false
+        - name: month
+          in: query
+          schema:
+            type: integer
+          required: false
+        - name: year
+          in: query
+          schema:
+            type: integer
+          required: false
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/PaymentStatus'
+          required: false
+        - name: minAmount
+          in: query
+          schema:
+            type: number
+            format: double
+          required: false
+        - name: maxAmount
+          in: query
+          schema:
+            type: number
+            format: double
+          required: false
+      responses:
+        '200':
+          description: Lista filtrada de pagos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentDTO'
+        '403':
+          description: Acceso no autorizado
+
+  /api/payments/{paymentId}/receipt:
+    get:
+      tags: [Payments]
+      summary: Descargar comprobante de pago
+      description: Genera y descarga el comprobante de un pago completado en formato PDF.
+      security:
+        - bearerAuth: []
+      operationId: downloadPaymentReceipt
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Archivo PDF del comprobante
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: No se puede generar el comprobante (pago no completado)
+        '401':
+          description: Usuario no autenticado
+        '403':
+          description: Acceso no autorizado
+        '500':
+          description: Error interno al procesar el comprobante
+
+  /api/payments/{paymentId}:
+    patch:
+      tags: [Payments]
+      summary: Actualizar un pago existente
+      operationId: updatePaymentById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentDTO'
+      responses:
+        '200':
+          description: Pago actualizado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDTO'
+        '401':
+          description: Usuario no autenticado
+        '403':
+          description: Acceso no autorizado
+        '404':
+          description: Pago no encontrado
+
+  /api/payments/artist/{artistId}:
+    get:
+      tags: [Payments]
+      summary: Obtener pagos de un artista
+      description: Retorna todos los pagos asociados a un artista específico. El usuario autenticado debe ser el artista o un administrador.
+      operationId: getPaymentsByArtist
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: artistId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de pagos del artista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentDTO'
+        '401':
+          description: Usuario no autenticado
+        '403':
+          description: Acceso no autorizado
+        '404':
+          description: Artista no encontrado
+
+  /api/payments/artist/{artistId}/ordered:
+    get:
+      tags: [Payments]
+      summary: Obtener pagos de un artista ordenados por fecha
+      description: Lista los pagos de un artista ordenados de más recientes a más antiguos. El usuario autenticado debe ser el artista o un administrador.
+      operationId: getOrderedPaymentsByArtist
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: artistId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista ordenada de pagos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentDTO'
+        '401':
+          description: Usuario no autenticado
+        '403':
+          description: Acceso no autorizado
+        '404':
+          description: Artista no encontrado
+
+  /api/purchase/album/{albumPublicId}:
+    put:
+      tags: [Purchases]
+      summary: Comprar un álbum
+      description: Realiza la compra de un álbum para el usuario autenticado.
+      operationId: purchaseAlbum
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: albumPublicId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Compra de álbum exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessfulPurchaseDTO'
+        '401':
+          description: Usuario no autenticado
+
+  /api/purchase/song/{songPublicId}:
+    put:
+      tags: [Purchases]
+      summary: Comprar una canción
+      description: Realiza la compra de una canción para el usuario autenticado.
+      operationId: purchaseSong
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: songPublicId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Compra de canción exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessfulPurchaseDTO'
+        '401':
+          description: Usuario no autenticado
+
+  /api/purchase/user/{userId}/albums:
+    get:
+      tags: [Purchases]
+      summary: Obtener referencias de álbumes comprados por un usuario
+      description: >
+        Endpoint interno que devuelve los IDs de los álbumes que un usuario ha comprado.
+        El servicio que consume esta ruta es responsable de obtener los detalles completos del álbum
+        desde el servicio de catálogo.
+      operationId: getPurchasedAlbumsForUser
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de referencias a álbumes comprados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PurchasedAlbumRefDTO'
+        '403':
+          description: Acceso no autorizado
+
+  /api/purchase/user/{userId}/songs:
+    get:
+      tags: [Purchases]
+      summary: Obtener referencias de canciones compradas por un usuario
+      description: >
+        Endpoint interno que devuelve los IDs de las canciones que un usuario ha comprado.
+        El servicio que consume esta ruta es responsable de obtener los detalles completos de la canción
+        desde el servicio de catálogo.
+      operationId: getPurchasedSongsForUser
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de referencias a canciones compradas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PurchasedSongRefDTO'
+        '403':
+          description: Acceso no autorizado
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+
+  schemas:
+    PaymentDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        purchaseId:
+          type: string
+          format: uuid
+          description: "ID de la compra que originó este pago."
+          example: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        artistId:
+          type: integer
+          example: 15
+        artistName:
+          type: string
+          example: "DJ Shadows"
+        concept:
+          type: string
+          example: "Pago por venta de 'Midnight In A Perfect World'"
+        paymentDate:
+          type: string
+          format: date-time
+        amount:
+          type: number
+          format: double
+          example: 1.25
+        paymentMethod:
+          type: string
+          example: "PLATFORM_BALANCE"
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
+
+    PaymentStatus:
+      type: string
+      enum: [PENDING, COMPLETED, FAILED]
+
+    SuccessfulPurchaseDTO:
+      type: object
+      properties:
+        purchaseId:
+          type: string
+          format: uuid
+          description: "El ID único de la compra realizada."
+          example: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        message:
+          type: string
+          example: "The album was purchased successfully"
+        statusCode:
+          type: integer
+          example: 200
+        timestamp:
+          type: string
+          format: date-time
+
+    PurchasedAlbumRefDTO:
+      type: object
+      description: "Referencia a un álbum comprado por un usuario."
+      properties:
+        albumPublicId:
+          type: string
+          format: uuid
+          description: "El ID público del álbum comprado."
+        purchaseDate:
+          type: string
+          format: date-time
+          description: "Fecha y hora de la compra."
+
+    PurchasedSongRefDTO:
+      type: object
+      description: "Referencia a una canción comprada por un usuario."
+      properties:
+        songPublicId:
+          type: string
+          format: uuid
+          description: "El ID público de la canción comprada."
+        purchaseDate:
+          type: string
+          format: date-time
+          description: "Fecha y hora de la compra."

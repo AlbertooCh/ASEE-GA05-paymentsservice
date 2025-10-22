@@ -1,0 +1,35 @@
+services:
+  payments-db:
+    image: mysql:8.0
+    container_name: payments-db
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: payments-db # Base de datos para tu servicio
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: admin
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  keycloak:
+    image: 'quay.io/keycloak/keycloak:latest'
+    container_name: keycloak
+    # CAMBIO: Se elimina 'command: start-dev' para usar configuración de producción
+    command: start-dev
+    environment:
+      - 'KEYCLOAK_ADMIN=admin'
+      - 'KEYCLOAK_ADMIN_PASSWORD=admin'
+      # CAMBIO: Añadir configuración para que Keycloak use MySQL
+      - 'KC_DB=mysql'
+      - 'KC_DB_URL=jdbc:mysql://payments-db:3306/payments-db' # Usa el nombre del servicio 'payments-db'
+      - 'KC_DB_USERNAME=admin'
+      - 'KC_DB_PASSWORD=admin'
+    ports:
+      - '8081:8080'
+    depends_on:
+      - payments-db
+
+# Añadir un volumen para que los datos de MySQL sean persistentes
+volumes:
+  mysql_data:
